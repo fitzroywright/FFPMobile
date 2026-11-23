@@ -1,7 +1,6 @@
 using System.Threading.RateLimiting;
 using Common.Security.Abstractions;
 using Common.Security.Authenticators;
-using Common.Security.Hosting;
 using Common.Security.Integration;
 using Common.Security.Models;
 using Common.Security.Services;
@@ -9,8 +8,9 @@ using Microsoft.Data.Sqlite;
 using FFPMobile.Api;
 
 var builder = WebApplication.CreateBuilder(args);
-string dataPath = builder.Configuration["Security:SqlitePath"]
-    ?? throw new InvalidOperationException("Security:SqlitePath is required.");
+string dataPath = builder.Configuration["Security:SqlitePath"] ?? "";
+if (string.IsNullOrWhiteSpace(dataPath))
+    throw new InvalidOperationException("Security:SqlitePath is required.");
 builder.Services.AddCommonAccountStore(_ =>
     new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = dataPath }.ToString()),
     "ffp-mobile");
