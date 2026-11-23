@@ -1,0 +1,3 @@
+# Architecture
+
+Three separately packaged .NET MAUI Android applications in one repository. Each shares a small UI/profile foundation but has its own application ID, permissions scope and release process. Mobile endpoints are private/VPN-only; no Android direct SQL Server access. Request Portal's internet-facing bridge is not shared. Later FFP Integration Services provide encrypted local offline queues, authentication and role claims sourced from FFP Manager's effective XAF permissions. ERP-specific adapters isolate FFP Manager from future Business Central. Security Post event authority is restricted to gate operations; events must not constitute ERP approval or inventory posting.

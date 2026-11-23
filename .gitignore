@@ -1,0 +1,12 @@
+**/bin/
+**/obj/
+.vs/
+.idea/
+*.user
+*.keystore
+*.jks
+*.p12
+*.pfx
+*.apk
+*.aab
+local.settings.json

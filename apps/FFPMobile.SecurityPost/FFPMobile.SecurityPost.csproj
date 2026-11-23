@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>FFPMobile.App</RootNamespace>
+    <ApplicationTitle>FFP Mobile Security Post</ApplicationTitle>
+    <ApplicationId>org.ffp.mobile.security</ApplicationId>
+  </PropertyGroup>
+  <ItemGroup>
+    <MauiIcon Include="Resources/AppIcon/appicon.svg" />
+    <Compile Include="../../shared/Profiles/*.cs" Link="Shared/Profiles/%(Filename)%(Extension)" />
+    <Compile Include="../../shared/Ui/*.cs" Link="Shared/Ui/%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>
