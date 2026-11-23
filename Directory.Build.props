@@ -1,5 +1,5 @@
 <Project>
-  <PropertyGroup>
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'FFPMobile.FieldOfficers' Or '$(MSBuildProjectName)' == 'FFPMobile.WarehouseOperations' Or '$(MSBuildProjectName)' == 'FFPMobile.SecurityPost'">
     <TargetFramework>net11.0-android</TargetFramework>
     <UseMaui>true</UseMaui>
     <SingleProject>true</SingleProject>

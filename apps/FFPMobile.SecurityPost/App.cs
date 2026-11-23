@@ -16,6 +16,6 @@ public sealed class App : Application
                 new("Visitor Log", "Capture checkpoint visitor events."),
                 new("Pending Events", "Review events awaiting synchronization.")
             });
-        return new Window(new NavigationPage(new LoginPage(profile)));
+        return new Window(new NavigationPage(new LoginPage(profile, "security-post")));
     }
 }

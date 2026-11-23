@@ -7,6 +7,7 @@
   <ItemGroup>
     <MauiIcon Include="Resources/AppIcon/appicon.svg" />
     <Compile Include="../../shared/Profiles/*.cs" Link="Shared/Profiles/%(Filename)%(Extension)" />
+    <Compile Include="../../shared/Authentication/*.cs" Link="Shared/Authentication/%(Filename)%(Extension)" />
     <Compile Include="../../shared/Ui/*.cs" Link="Shared/Ui/%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

@@ -16,6 +16,6 @@ public sealed class App : Application
                 new("Assigned Work", "Review locally cached assigned work."),
                 new("My Records", "Review local drafts and synchronization state.")
             });
-        return new Window(new NavigationPage(new LoginPage(profile)));
+        return new Window(new NavigationPage(new LoginPage(profile, "field-officers")));
     }
 }

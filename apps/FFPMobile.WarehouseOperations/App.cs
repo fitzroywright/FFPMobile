@@ -17,6 +17,6 @@ public sealed class App : Application
                 new("Returns to Stock", "Record returns linked to original issues."),
                 new("Count Sheets", "Capture physical inventory counts.")
             });
-        return new Window(new NavigationPage(new LoginPage(profile)));
+        return new Window(new NavigationPage(new LoginPage(profile, "warehouse-operations")));
     }
 }
