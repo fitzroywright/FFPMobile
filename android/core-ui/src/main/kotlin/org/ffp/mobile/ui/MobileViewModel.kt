@@ -19,8 +19,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.ffp.mobile.auth.AccountSession
 import org.ffp.mobile.auth.AuthRepository
+import org.ffp.mobile.auth.AuthenticationFeedback
 import org.ffp.mobile.auth.DeviceSettings
 import org.ffp.mobile.network.MobileApplication
+import org.json.JSONObject
 import retrofit2.HttpException
 import java.io.IOException
 import java.time.Duration
@@ -44,8 +46,9 @@ data class LoginState(
     val loading: Boolean = false,
     val error: String? = null,
     val account: AccountSession? = null,
+    val deviceStatus: String? = null,
 )
-data class Section(val title: String, val description: String)
+data class Section(val title: String, val description: String, val permissionId: String = "")
 
 @HiltViewModel
 class MobileViewModel @Inject constructor(
@@ -55,19 +58,52 @@ class MobileViewModel @Inject constructor(
 ) : ViewModel() {
     private val _endpoint = MutableStateFlow(settings.endpoint())
     val endpoint = _endpoint.asStateFlow()
-    val signInEnabled = authentication.signInEnabled
+    val mockAvailable = authentication.mockAvailable
     private val _login = MutableStateFlow(LoginState())
     val login = _login.asStateFlow()
 
-    fun signIn(application: MobileApplication, username: String, password: String) {
-        if (!signInEnabled || _login.value.loading || _login.value.account != null) return
+    fun enrollTablet(application: MobileApplication) {
+        if (_login.value.loading || _login.value.account != null) return
+        _login.value = LoginState(loading = true)
+        viewModelScope.launch {
+            _login.value = try {
+                LoginState(deviceStatus = authentication.enrollTablet(application))
+            } catch (feedback: AuthenticationFeedback) {
+                LoginState(error = feedback.message)
+            } catch (_: IOException) {
+                LoginState(error = "Could not reach the private API. Check Device Settings and your network.")
+            } catch (_: IllegalArgumentException) {
+                LoginState(error = "Enter the private HTTPS API origin in Device Settings.")
+            } catch (_: Exception) {
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                LoginState(error = "The Mobile API could not complete tablet enrollment.")
+            }
+        }
+    }
+
+    fun signIn(application: MobileApplication, username: String, password: String, mock: Boolean) {
+        if (_login.value.loading || _login.value.account != null) return
         _login.value = LoginState(loading = true)
         viewModelScope.launch {
             val account = try {
-                authentication.signIn(application, username, password)
+                authentication.signIn(application, username, password, mock)
+            } catch (feedback: AuthenticationFeedback) {
+                _login.value = LoginState(error = feedback.message)
+                return@launch
             } catch (failure: HttpException) {
                 val message = when (failure.code()) {
-                    401, 403 -> "Sign-in was denied. Check your account or contact your administrator."
+                    401 -> "Sign-in was denied. Check your credentials or ask your administrator to verify your account."
+                    403 -> {
+                        val code = failure.response()?.errorBody()?.use { body ->
+                            runCatching { JSONObject(body.string()).optString("code") }.getOrNull()
+                        }
+                        when (code) {
+                            "warehouse-access-denied" -> "Your account was verified. Warehouse permissions are unavailable or have not been granted."
+                            "application-permissions-unavailable" -> "Your account was verified. Permissions for this application are not configured."
+                            "application-mismatch" -> "This installation is registered to another application."
+                            else -> "Access was denied. Check the tablet approval or contact your administrator."
+                        }
+                    }
                     429 -> "Too many sign-in attempts. Try again later."
                     else -> "The sign-in service is unavailable."
                 }
@@ -91,11 +127,11 @@ class MobileViewModel @Inject constructor(
     }
 
     fun signOut() {
-        if (_login.value.account == null) return
+        val account = _login.value.account ?: return
         _login.value = LoginState(loading = true)
         viewModelScope.launch {
             try {
-                authentication.clearSession()
+                if (!account.mock) authentication.clearSession()
                 _login.value = LoginState()
             } catch (_: IllegalStateException) {
                 _login.value = LoginState(error = "Could not clear saved credentials. Contact your administrator.")

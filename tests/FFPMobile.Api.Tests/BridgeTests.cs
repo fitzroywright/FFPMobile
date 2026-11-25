@@ -30,6 +30,17 @@ public sealed class BridgeTests
     }
 
     [Fact]
+    public async Task Field_Officers_Bridge_Only_Accepts_Field_Officers_Modules()
+    {
+        using var http = new HttpClient(new Evaluator(XafUser,
+            [WarehouseModules.StockCounts, "purchase-orders", "dispatch-verification"], "field-officers"));
+        var bridge = new FfpManagerPermissionSource(http, new Uri("https://xaf.example/"),
+            new Dictionary<string, FfpManagerBinding> { [Employee.AccountId] = new(Employee.DirectoryId, Employee.SubjectId, XafUser) },
+            _ => Task.FromResult("test-service-token"), "field-officers", OtherMobileModules.FieldOfficers);
+        Assert.Equal(["purchase-orders"], await bridge.ResolveAsync(Employee, default));
+    }
+
+    [Fact]
     public async Task Unconfigured_Bridge_Denies_Access_And_Readiness()
     {
         using var transport = new Evaluator(XafUser, [WarehouseModules.StockCounts]);
@@ -46,13 +57,13 @@ public sealed class BridgeTests
             new Dictionary<string, FfpManagerBinding> { [Employee.AccountId] = new(Employee.DirectoryId, Employee.SubjectId, user) },
             _ => Task.FromResult("test-service-token"));
 
-    private sealed class Evaluator(Guid returnedUser, string[] modules) : HttpMessageHandler
+    private sealed class Evaluator(Guid returnedUser, string[] modules, string resource = "warehouse") : HttpMessageHandler
     {
         public int Calls { get; private set; }
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Calls++;
-            Assert.Equal("https://xaf.example/v1/warehouse/permissions", request.RequestUri!.AbsoluteUri);
+            Assert.Equal($"https://xaf.example/v1/{resource}/permissions", request.RequestUri!.AbsoluteUri);
             Assert.Equal("test-service-token", request.Headers.Authorization?.Parameter);
             var input = await request.Content!.ReadFromJsonAsync<DecisionRequest>(cancellationToken);
             Assert.Equal(new DecisionRequest(XafUser, Employee.DirectoryId, Employee.SubjectId), input);

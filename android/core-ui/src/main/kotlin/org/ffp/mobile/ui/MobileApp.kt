@@ -41,6 +41,8 @@ fun MobileApp(profile: MobileProfile, model: MobileViewModel) {
     val endpoint by model.endpoint.collectAsStateWithLifecycle()
     val login by model.login.collectAsStateWithLifecycle()
     val account = login.account
+    val canMock = model.mockAvailable
+    var mock by rememberSaveable { mutableStateOf(canMock) }
 
     fun back() {
         if (section >= 0) section = -1 else preview = false
@@ -57,7 +59,8 @@ fun MobileApp(profile: MobileProfile, model: MobileViewModel) {
                     ) {
                         FfpTopAppBar(profile.subtitle, "Sign Out", model::signOut)
                         Text("Welcome, ${account.displayName}", style = MaterialTheme.typography.headlineMedium)
-                        Text("This deployment has no commissioned FFP Manager workspace.")
+                        if (account.mock) FfpStatusIndicator("MOCK SESSION", FfpPrimary)
+                        DestinationGrid(profile.sections.filter { it.permissionId in account.authorizedModules }) {}
                         FfpOfflineBanner(online)
                         FfpSyncStatus("Unavailable")
                     }
@@ -65,13 +68,15 @@ fun MobileApp(profile: MobileProfile, model: MobileViewModel) {
                     else -> FfpLoginScaffold(
                         profile = profile,
                         online = online,
-                        signInEnabled = model.signInEnabled,
-                        configured = endpoint.isNotBlank(),
+                        configured = mock || endpoint.isNotBlank(),
                         auth = login,
-                        onSignIn = { username, password -> model.signIn(profile.application, username, password) },
+                        onSignIn = { username, password -> model.signIn(profile.application, username, password, mock) },
                         openSettings = { settingsOpen = true },
                         openPreview = { preview = true },
                         onForgotPassword = { passwordHelpOpen = true },
+                        modeToggle = if (canMock) ({ mock = !mock }) else null,
+                        mock = mock && canMock,
+                        enrollTablet = if (!mock) ({ model.enrollTablet(profile.application) }) else null,
                     )
                 }
             }

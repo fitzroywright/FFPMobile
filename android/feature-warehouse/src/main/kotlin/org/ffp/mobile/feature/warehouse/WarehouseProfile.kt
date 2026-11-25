@@ -5,11 +5,11 @@ import org.ffp.mobile.ui.MobileProfile
 import org.ffp.mobile.ui.Section
 
 private val warehouseOperations = listOf(
-    Section("Stock Count", "Select a count sheet to review or count."),
-    Section("Inventory Report", "Review warehouse inventory."),
-    Section("Delivery Orders", "Review delivery paperwork."),
-    Section("Return to Stock", "Review returns to inventory."),
-    Section("Goods Receival", "Review goods awaiting receipt."),
+    Section("Stock Counts", "Select a count sheet to review or count.", "stock-counts"),
+    Section("Inventory Reports", "Review warehouse inventory.", "inventory-reports"),
+    Section("Delivery Orders", "Review delivery paperwork.", "delivery-orders"),
+    Section("Return to Stock", "Review returns to inventory.", "return-to-stock"),
+    Section("Goods Receival", "Review goods awaiting receipt.", "goods-receival"),
 )
 
 val WarehouseProfile = MobileProfile(

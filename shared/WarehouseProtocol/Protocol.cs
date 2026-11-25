@@ -6,10 +6,15 @@ namespace FFPMobile.Shared.WarehouseProtocol;
 public static class Protocol
 {
     public const string Application = "warehouse-operations";
+    public const string FieldOfficers = "field-officers";
+    public const string SecurityPost = "security-post";
     public const string InstallationHeader = "X-FFP-Installation";
     public const string NonceHeader = "X-FFP-Nonce";
     public const string TimeHeader = "X-FFP-Time";
     public const string SignatureHeader = "X-FFP-Signature";
+
+    public static bool SupportsApplication(string? application) =>
+        application is Application or FieldOfficers or SecurityPost;
 
     public static string InstallationId(byte[] publicKey) => Convert.ToHexString(SHA256.HashData(publicKey));
 

@@ -13,7 +13,8 @@ public sealed record DeviceSession(WarehouseIdentity Employee, string DeviceId, 
 
 public sealed class EmployeeAuthentication(IAuthenticator authenticator, IAccountStore accounts)
 {
-    public BoundEmployee? Authenticate(string? username, string? password, AccountPopulation population)
+    public BoundEmployee? Authenticate(string? username, string? password, AccountPopulation population,
+        IReadOnlySet<string>? additionalStaffAccounts = null)
     {
         if (string.IsNullOrWhiteSpace(username) || username.Length > 256 ||
             string.IsNullOrWhiteSpace(password) || password.Length > 1024)
@@ -27,11 +28,23 @@ public sealed class EmployeeAuthentication(IAuthenticator authenticator, IAccoun
             { ProviderKind: AuthenticationProviderKind.ActiveDirectory, Key.ProviderId: "active-directory" } identity ||
             !Guid.TryParse(identity.Key.ScopeId, out var directoryId) || !Guid.TryParse(identity.Key.SubjectId, out var subjectId))
             return null;
+        var account = Resolve(identity, population);
+        if (account is null && population == AccountPopulation.Staff && additionalStaffAccounts is { Count: > 0 })
+        {
+            var administrator = Resolve(identity, AccountPopulation.Administrator);
+            if (administrator is not null && additionalStaffAccounts.Contains(administrator.Id))
+                account = administrator;
+        }
+        return account is { Status: SecurityAccountStatus.Active }
+            ? new(account, new(account.Id, directoryId, subjectId)) : null;
+    }
+
+    private SecurityAccount? Resolve(VerifiedIdentity identity, AccountPopulation population)
+    {
         try
         {
             var account = accounts.Resolve(identity, population, false).Account;
-            return account.Status == SecurityAccountStatus.Active && account.Population == population
-                ? new(account, new(account.Id, directoryId, subjectId)) : null;
+            return account.Population == population ? account : null;
         }
         catch (InvalidOperationException) { return null; }
         catch (KeyNotFoundException) { return null; }

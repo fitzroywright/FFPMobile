@@ -15,9 +15,9 @@ val SecurityProfile = MobileProfile(
     ),
     dashboard = "Browse dispatch checks and checkpoint activity.",
     sections = listOf(
-        Section("Dispatch Verification", "Physical release requires current authorization from the server."),
-        Section("Vehicle Movements", "Review vehicle arrivals and departures."),
-        Section("Visitor Log", "Review checkpoint visitor activity."),
+        Section("Dispatch Verification", "Physical release requires current authorization from the server.", "dispatch-verification"),
+        Section("Vehicle Movements", "Review vehicle arrivals and departures.", "vehicle-movements"),
+        Section("Visitor Log", "Review checkpoint visitor activity.", "visitor-log"),
         Section("Pending Events", "Review checkpoint events awaiting server confirmation."),
         Section("Synchronization", "View acknowledgement and conflict status for checkpoint events."),
     ),

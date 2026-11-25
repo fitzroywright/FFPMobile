@@ -56,6 +56,67 @@ public sealed class WarehouseTests
         Assert.Null(host.Accounts.Find("unbound"));
     }
 
+    [Fact]
+    public async Task A_Device_Administrator_Needs_Explicit_Warehouse_Enrollment_And_Erp_Permissions()
+    {
+        await using var defaultHost = await Host.StartAsync();
+        using var defaultTablet = await defaultHost.ApproveAsync();
+        await Fails("employee-not-authorized", () => defaultTablet.Api.LoginAsync(Origin, "admin", Password));
+
+        await using var approvedHost = await Host.StartAsync(allowAdministratorAsEmployee: true);
+        using var tablet = await approvedHost.ApproveAsync();
+        approvedHost.Permissions.Modules = [];
+        await Fails("warehouse-access-denied", () => tablet.Api.LoginAsync(Origin, "admin", Password));
+        approvedHost.Permissions.Modules = [WarehouseModules.StockCounts];
+        var session = await tablet.Api.LoginAsync(Origin, "admin", Password);
+        Assert.Equal([WarehouseModules.StockCounts], session.AuthorizedModules);
+    }
+
+    [Theory]
+    [InlineData(Protocol.FieldOfficers)]
+    [InlineData(Protocol.SecurityPost)]
+    public async Task Other_Applications_Require_Their_Own_Approval_And_Permission_Source(string application)
+    {
+        await using var host = await Host.StartAsync(allowAdministratorAsEmployee: true);
+        using var tablet = new Tablet(host.Http, application);
+        var registered = await tablet.Api.RegisterAsync(Origin, "Operations tablet");
+        Assert.Equal(application, registered.Application);
+        await Fails("device-pending", () => tablet.Api.LoginAsync(Origin, "alice", Password));
+
+        var warehouse = new WarehouseApiClient(host.Http, tablet);
+        await Fails("application-mismatch", () => warehouse.RegisterAsync(Origin, "Wrong application"));
+        await Fails("application-mismatch", () => warehouse.LoginAsync(Origin, "alice", Password));
+        Assert.Equal(HttpStatusCode.NoContent, await host.StatusAsync(registered.Id, "Approved"));
+        await Fails("employee-not-authorized", () => tablet.Api.LoginAsync(Origin, "admin", Password));
+        await Fails("application-permissions-unavailable", () => tablet.Api.LoginAsync(Origin, "alice", Password));
+        Assert.Equal(application, (await tablet.Api.StatusAsync(Origin)).Application);
+    }
+
+    [Theory]
+    [InlineData(Protocol.FieldOfficers, "purchase-orders")]
+    [InlineData(Protocol.SecurityPost, "dispatch-verification")]
+    public async Task An_Application_Uses_Only_Its_Own_Permission_Source(string application, string module)
+    {
+        await using var host = await Host.StartAsync(application: application, applicationModule: module);
+        using var tablet = new Tablet(host.Http, application);
+        var registered = await tablet.Api.RegisterAsync(Origin, "Operations tablet");
+        Assert.Equal(HttpStatusCode.NoContent, await host.StatusAsync(registered.Id, "Approved"));
+        var session = await tablet.Api.LoginAsync(Origin, "alice", Password);
+        Assert.Equal([module], session.AuthorizedModules);
+        Assert.Equal([module], (await tablet.Api.ValidateAsync(Origin, session.AccessToken, false)).AuthorizedModules);
+    }
+
+    [Fact]
+    public async Task A_Security_Post_Administrator_Enrollment_Does_Not_Apply_To_Field_Officers()
+    {
+        await using var host = await Host.StartAsync(additionalAdministratorApplication: Protocol.SecurityPost);
+        using var security = await host.ApproveAsync(Protocol.SecurityPost);
+        await Fails("application-permissions-unavailable", () => security.Api.LoginAsync(Origin, "admin", Password));
+
+        using var field = await host.ApproveAsync(Protocol.FieldOfficers);
+        await Fails("employee-not-authorized", () => field.Api.LoginAsync(Origin, "admin", Password));
+    }
+
     [Theory]
     [InlineData(WarehouseModules.StockCounts)]
     [InlineData(WarehouseModules.InventoryReports)]
@@ -154,7 +215,8 @@ public sealed class WarehouseTests
     private sealed class Tablet : IDisposable, IInstallationKey
     {
         private readonly ECDsa key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        public Tablet(HttpClient http) => Api = new WarehouseApiClient(http, this);
+        public Tablet(HttpClient http, string application = Protocol.Application) =>
+            Api = new WarehouseApiClient(http, this, application);
         public WarehouseApiClient Api { get; }
         public byte[] PublicKey => key.ExportSubjectPublicKeyInfo();
         public string Id => Protocol.InstallationId(PublicKey);
@@ -220,11 +282,16 @@ public sealed class WarehouseTests
         public MobileSessions Sessions => app.Services.GetRequiredService<MobileSessions>();
         public Permissions Permissions => (Permissions)app.Services.GetRequiredService<IWarehousePermissionSource>();
 
-        public static async Task<Host> StartAsync()
+        public static async Task<Host> StartAsync(bool allowAdministratorAsEmployee = false,
+            string? application = null, string? applicationModule = null, string? additionalAdministratorApplication = null)
         {
             var builder = WebApplication.CreateBuilder();
             builder.WebHost.UseTestServer();
             builder.Configuration["Devices:AdministratorAccountIds:0"] = "admin";
+            if (allowAdministratorAsEmployee)
+                builder.Configuration["Security:Warehouse:AdditionalAdministratorAccountIds:0"] = "admin";
+            if (additionalAdministratorApplication is not null)
+                builder.Configuration[$"Security:Applications:{additionalAdministratorApplication}:AdditionalAdministratorAccountIds:0"] = "admin";
             string connection = $"Data Source={Guid.NewGuid():N};Mode=Memory;Cache=Shared;Pooling=False";
             SqliteConnection anchor = new(connection);
             anchor.Open();
@@ -239,6 +306,8 @@ public sealed class WarehouseTests
             builder.Services.AddSingleton<OpaqueAccountSessions<DeviceSession>>();
             builder.Services.AddSingleton<MobileSessions>();
             builder.Services.AddSingleton<IWarehousePermissionSource, Permissions>();
+            if (application is not null && applicationModule is not null)
+                builder.Services.AddKeyedSingleton<IWarehousePermissionSource>(application, new Permissions { Modules = [applicationModule] });
             var app = builder.Build();
             var accounts = app.Services.GetRequiredService<IAccountStore>();
             foreach (var (id, display, population, status) in new[]
@@ -259,9 +328,9 @@ public sealed class WarehouseTests
             return host;
         }
 
-        public async Task<Tablet> ApproveAsync()
+        public async Task<Tablet> ApproveAsync(string application = Protocol.Application)
         {
-            var tablet = new Tablet(Http);
+            var tablet = new Tablet(Http, application);
             await tablet.Api.RegisterAsync(Origin, "Test tablet");
             Assert.Equal(HttpStatusCode.NoContent, await StatusAsync(tablet.Id, "Approved"));
             return tablet;

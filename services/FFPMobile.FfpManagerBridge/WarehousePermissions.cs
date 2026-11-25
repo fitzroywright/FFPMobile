@@ -19,6 +19,15 @@ public static class WarehouseModules
         new[] { StockCounts, InventoryReports, DeliveryOrders, ReturnToStock, GoodsReceival });
 }
 
+public static class OtherMobileModules
+{
+    public static IReadOnlyList<string> FieldOfficers { get; } =
+        Array.AsReadOnly(new[] { "purchase-orders", "payment-requests" });
+
+    public static IReadOnlyList<string> SecurityPost { get; } =
+        Array.AsReadOnly(new[] { "dispatch-verification", "vehicle-movements", "visitor-log" });
+}
+
 public interface IWarehousePermissionSource
 {
     Task<IReadOnlyList<string>> ResolveAsync(WarehouseIdentity identity, CancellationToken cancellationToken);
@@ -29,7 +38,8 @@ public interface IWarehousePermissionSource
 // the explicitly bound XAF user and exposes stable capability IDs to mobile callers.
 public sealed class FfpManagerPermissionSource(
     HttpClient client, Uri? origin, IReadOnlyDictionary<string, FfpManagerBinding> bindings,
-    Func<CancellationToken, Task<string>> getServiceToken) : IWarehousePermissionSource
+    Func<CancellationToken, Task<string>> getServiceToken, string resource = "warehouse",
+    IReadOnlyList<string>? supportedModules = null) : IWarehousePermissionSource
 {
     public async Task<IReadOnlyList<string>> ResolveAsync(WarehouseIdentity identity, CancellationToken cancellationToken)
     {
@@ -38,7 +48,7 @@ public sealed class FfpManagerPermissionSource(
             return [];
 
         var userId = binding.UserId;
-        using var request = await CreateRequestAsync(HttpMethod.Post, "/v1/warehouse/permissions", cancellationToken);
+        using var request = await CreateRequestAsync(HttpMethod.Post, $"/v1/{resource}/permissions", cancellationToken);
         request.Content = JsonContent.Create(new { userId, identity.DirectoryId, identity.SubjectId });
         using var response = await client.SendAsync(request, cancellationToken);
         if (response.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.Forbidden)
@@ -47,14 +57,15 @@ public sealed class FfpManagerPermissionSource(
         var decision = await response.Content.ReadFromJsonAsync<EffectiveWarehousePermissions>(cancellationToken);
         if (decision?.UserId != userId || decision.Modules is null)
             return [];
-        return WarehouseModules.All.Where(module => decision.Modules.Contains(module, StringComparer.Ordinal)).ToArray();
+        return (supportedModules ?? WarehouseModules.All)
+            .Where(module => decision.Modules.Contains(module, StringComparer.Ordinal)).ToArray();
     }
 
     public async Task<bool> IsReadyAsync(CancellationToken cancellationToken)
     {
         if (origin is null || bindings.Count == 0)
             return false;
-        using var request = await CreateRequestAsync(HttpMethod.Get, "/v1/warehouse/ready", cancellationToken);
+        using var request = await CreateRequestAsync(HttpMethod.Get, $"/v1/{resource}/ready", cancellationToken);
         using var response = await client.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;
     }

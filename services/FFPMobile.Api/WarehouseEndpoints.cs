@@ -15,6 +15,15 @@ public static class WarehouseEndpoints
         var log = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("FFPMobile.Security");
         var administrators = (app.Configuration.GetSection("Devices:AdministratorAccountIds").Get<string[]>() ?? [])
             .ToHashSet(StringComparer.Ordinal);
+        IReadOnlySet<string> AdditionalAccounts(string section) =>
+            (app.Configuration.GetSection($"Security:{section}:AdditionalAdministratorAccountIds")
+                .Get<string[]>() ?? []).ToHashSet(StringComparer.Ordinal);
+        var additionalStaffAccounts = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+        {
+            [Protocol.Application] = AdditionalAccounts("Warehouse"),
+            [Protocol.FieldOfficers] = AdditionalAccounts($"Applications:{Protocol.FieldOfficers}"),
+            [Protocol.SecurityPost] = AdditionalAccounts($"Applications:{Protocol.SecurityPost}")
+        };
         app.MapGet("/health", () => Results.Ok(new { status = "alive" }));
         app.MapGet("/health/ready", async (IAccountStore accounts, DeviceStore devices, IEnumerable<IDependencyDiagnosticProbe> probes,
             IWarehousePermissionSource permissions, CancellationToken ct) =>
@@ -28,7 +37,7 @@ public static class WarehouseEndpoints
 
         app.MapPost("/api/devices/register", (RegisterDevice input, HttpRequest request, InstallationProof proof, DeviceStore devices) =>
         {
-            if (input.Application != Protocol.Application || string.IsNullOrWhiteSpace(input.Name) || input.Name.Length > 80 ||
+            if (!Protocol.SupportsApplication(input.Application) || string.IsNullOrWhiteSpace(input.Name) || input.Name.Length > 80 ||
                 input.Name.Any(char.IsControl) || input.PublicKey is null || input.PublicKey.Length > 180)
                 return Error(400, "invalid-registration");
 
@@ -38,7 +47,8 @@ public static class WarehouseEndpoints
 
             string id = Protocol.InstallationId(key);
             if (!proof.Verify(request, id, key, "")) return Error(401, "installation-proof-required");
-            return Results.Ok(devices.Register(id, input.Name.Trim(), input.Application, key).Details);
+            var device = devices.Register(id, input.Name.Trim(), input.Application, key).Details;
+            return device.Application == input.Application ? Results.Ok(device) : Error(403, "application-mismatch");
         }).RequireRateLimiting("devices");
 
         app.MapGet("/api/devices/status", (HttpRequest request, InstallationProof proof) =>
@@ -49,27 +59,31 @@ public static class WarehouseEndpoints
             EmployeeAuthentication authentication, IWarehousePermissionSource permissions, MobileSessions sessions,
             DeviceStore devices, CancellationToken ct) =>
         {
-            if (input.Application != Protocol.Application) return Error(403, "application-not-enabled");
+            if (!Protocol.SupportsApplication(input.Application)) return Error(403, "application-not-enabled");
             var device = proof.Authenticate(request);
             if (device is null) return Error(401, "installation-proof-required");
+            if (device.Details.Application != input.Application) return Error(403, "application-mismatch");
             if (device.Details.Status != DeviceStatus.Approved) return DeviceDenied(device.Details.Status);
 
-            var employee = authentication.Authenticate(input.UserName, input.Password, AccountPopulation.Staff);
+            var employee = authentication.Authenticate(
+                input.UserName, input.Password, AccountPopulation.Staff, additionalStaffAccounts[input.Application]);
             if (employee is null)
             {
-                log.LogWarning("Warehouse login rejected for installation {DeviceId}", device.Details.Id);
+                log.LogWarning("{Application} login rejected for installation {DeviceId}", input.Application, device.Details.Id);
                 return Error(401, "employee-not-authorized");
             }
-            var modules = await permissions.ResolveAsync(employee.Identity, ct);
+            var source = PermissionSource(request, permissions, input.Application);
+            IReadOnlyList<string> modules = source is null ? [] : await source.ResolveAsync(employee.Identity, ct);
             if (modules.Count == 0)
             {
-                log.LogWarning("Warehouse access denied to {AccountId} on {DeviceId}", employee.Account.Id, device.Details.Id);
-                return Error(403, "warehouse-access-denied");
+                log.LogWarning("Permissions unavailable for {Application} account {AccountId} on {DeviceId}",
+                    input.Application, employee.Account.Id, device.Details.Id);
+                return PermissionsDenied(input.Application);
             }
             if (!devices.RecordConnection(device.Details.Id, device.Version)) return Error(403, "device-approval-changed");
 
             var session = sessions.Create(employee, device);
-            log.LogInformation("Warehouse session started for {AccountId} on {DeviceId}", employee.Account.Id, device.Details.Id);
+            log.LogInformation("{Application} session started for {AccountId} on {DeviceId}", input.Application, employee.Account.Id, device.Details.Id);
             return Results.Ok(new EmployeeSession(session.Token, employee.Account.DisplayName, session.ExpiresAt, modules));
         }).RequireRateLimiting("credentials");
 
@@ -108,7 +122,7 @@ public static class WarehouseEndpoints
             var existing = sessions.Find(token, device);
             sessions.Remove(token, device);
             if (existing is not null)
-                log.LogInformation("Warehouse session ended for {AccountId} on {DeviceId}", existing.AccountId, device.Details.Id);
+                log.LogInformation("{Application} session ended for {AccountId} on {DeviceId}", device.Details.Application, existing.AccountId, device.Details.Id);
             return Results.NoContent();
         });
 
@@ -158,12 +172,21 @@ public static class WarehouseEndpoints
         if (device.Details.Status != DeviceStatus.Approved) return new(DeviceDenied(device.Details.Status));
         var session = sessions.Find(token, device);
         if (session is null) return new(Error(401, "session-expired"));
-        var modules = await permissions.ResolveAsync(session.Identity.Employee, ct);
-        if (modules.Count == 0) return new(Error(403, "warehouse-access-denied"));
+        var source = PermissionSource(request, permissions, device.Details.Application);
+        IReadOnlyList<string> modules = source is null ? [] : await source.ResolveAsync(session.Identity.Employee, ct);
+        if (modules.Count == 0) return new(PermissionsDenied(device.Details.Application));
         if (sessions.Find(token, device) is null) return new(Error(401, "session-expired"));
         if (!devices.RecordConnection(device.Details.Id, device.Version)) return new(Error(403, "device-approval-changed"));
         return new(null, device, session, modules);
     }
+
+    private static IWarehousePermissionSource? PermissionSource(HttpRequest request,
+        IWarehousePermissionSource warehouse, string application) =>
+        application == Protocol.Application ? warehouse :
+            request.HttpContext.RequestServices.GetKeyedService<IWarehousePermissionSource>(application);
+
+    private static IResult PermissionsDenied(string application) =>
+        Error(403, application == Protocol.Application ? "warehouse-access-denied" : "application-permissions-unavailable");
 
     private static string? Admin(HttpRequest request, EmployeeAuthentication authentication, HashSet<string> allowed)
     {

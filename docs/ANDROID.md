@@ -32,7 +32,58 @@ In Android Studio, set the desired module to `debug` in **Build Variants** and u
 
 ## Private API endpoint
 
-From sign-in, open **Device Settings**, enter the private HTTPS base URL from your administrator, and tap **Save**. Leave the URL blank to clear it. Use a VPN or the approved internal network and a certificate trusted by Android. The endpoint is configured separately per app. Sign-in and synchronization controls remain disabled in the Kotlin apps.
+For Warehouse AD sign-in, select **Use Active Directory** on a debug build, then confirm the approved API URL in **Device Settings**. Select **Register or Check Tablet** to enroll the Keystore-backed installation and obtain the installation ID without entering credentials. An authorized device administrator must approve the installation. After approval, FFPMobile.Api authenticates the employee through the Common.Security Active Directory provider for `FFTPJ.LOCAL` and obtains live permissions from the FFP Manager evaluator.
+
+The Windows emulator debug build defaults to the loopback HTTPS helper at `https://localhost:7241/` through ADB reverse, with the same local certificate setup documented below. Release uses the configured private HTTPS endpoint and standard Android certificate trust.
+
+The API's default directory settings use `DC=FFTPJ,DC=LOCAL` with LDAPS on port 636 to `jmad01.fftpj.local` and `jmad02.fftpj.local`. Windows verified TLS against both named directory controllers. The approved mobile origin still needs internal DNS, a trusted certificate and a commissioned XAF evaluator for real employee access.
+
+If a device administrator also uses a mobile app, an approver can add that existing Common.Security account ID to `Security:Warehouse:AdditionalAdministratorAccountIds` for Warehouse or `Security:Applications:<application-id>:AdditionalAdministratorAccountIds` for Field Officers or Security Post. The account keeps its original AD binding and the app's evaluator must still authorize its modules.
+
+Field Officers and Security Post use the same private API, Common.Security AD provider and tablet approval controls. Select **Use Active Directory**, then **Register or Check Tablet** in each app. Each installation belongs to one application and requires its own approval. Configure each authoritative permission evaluator independently under `FfpManager:Applications:field-officers` or `FfpManager:Applications:security-post`. Each section takes an HTTPS `PermissionServiceOrigin`, an OpenBao `ServiceTokenSecret` and verified `Bindings` using the same format as Warehouse. The evaluator exposes `POST /v1/field-officers/permissions` or `POST /v1/security-post/permissions` and returns the same decision shape as the Warehouse evaluator. Missing bindings or decisions prevent live access.
+
+## Windows Mock sign-in
+
+All three debug apps can call the isolated Common.Security Mock helper in FFPMobile.Api. Only the emulator's local HTTPS endpoint is used, with the Windows development certificate explicitly trusted by that debug client. Demo responses carry app-specific dashboard tiles and never contain an API access token.
+
+From the repository root, with an API 37 emulator running (use its serial from `adb devices`), run:
+
+```powershell
+$env:JAVA_HOME = 'C:\Program Files\Android\Android Studio\jbr'
+$env:ANDROID_HOME = Join-Path $env:LOCALAPPDATA 'Android\Sdk'
+$adb = Join-Path $env:ANDROID_HOME 'platform-tools\adb.exe'
+dotnet dev-certs https --trust
+$certDir = Join-Path $PWD 'android\core-auth\build\mock-tls-assets'
+New-Item -ItemType Directory -Force $certDir | Out-Null
+dotnet dev-certs https --export-path (Join-Path $certDir 'warehouse-mock.cer') --format PEM
+& $adb -s emulator-5556 reverse tcp:7241 tcp:7241
+Push-Location android
+.\gradlew.bat :app-warehouse:assembleDebug :app-field-officers:assembleDebug :app-security-post:assembleDebug
+& $adb -s emulator-5556 install -r app-warehouse\build\outputs\apk\debug\app-warehouse-debug.apk
+& $adb -s emulator-5556 install -r app-field-officers\build\outputs\apk\debug\app-field-officers-debug.apk
+& $adb -s emulator-5556 install -r app-security-post\build\outputs\apk\debug\app-security-post-debug.apk
+Pop-Location
+$data = Join-Path $PWD 'artifacts\mock-data'
+New-Item -ItemType Directory -Force $data | Out-Null
+$env:ASPNETCORE_ENVIRONMENT = 'Development'
+$env:Security__SqlitePath = Join-Path $data 'accounts.db'
+$env:Devices__SqlitePath = Join-Path $data 'devices.db'
+$env:Security__Mock__Enabled = 'true'
+$env:Security__Mock__IsolationConfirmed = 'true'
+$env:Security__Mock__Password = 'demo'
+$env:Security__Mock__Identities__0__LoginName = 'warehouse-demo'
+$env:Security__Mock__Identities__0__SubjectId = 'warehouse-demo'
+$env:Security__Mock__Identities__0__DisplayName = 'Warehouse Demo'
+$env:Security__Mock__Identities__1__LoginName = 'field-demo'
+$env:Security__Mock__Identities__1__SubjectId = 'field-demo'
+$env:Security__Mock__Identities__1__DisplayName = 'Field Officers Demo'
+$env:Security__Mock__Identities__2__LoginName = 'security-demo'
+$env:Security__Mock__Identities__2__SubjectId = 'security-demo'
+$env:Security__Mock__Identities__2__DisplayName = 'Security Post Demo'
+dotnet run --project services\FFPMobile.Api --no-launch-profile -p:CommonSecurityRoot=D:/Projects/Common.Security -p:CommonRoot=D:/Projects/Common -- --urls https://localhost:7241
+```
+
+Use password `demo` with `warehouse-demo`, `field-demo` or `security-demo` in the corresponding app. OIDC requires an approved issuer, mobile redirect registration, and verified organizational account and FFP Manager bindings.
 
 The UI preview has no account session, transaction access or live data. The Warehouse API requires a commissioned permission evaluator and approved account bindings. See [Warehouse Phase 1](WAREHOUSE-PHASE-1.md) for the server integration. See the [release gates](IMPLEMENTATION.md) for remaining integration and operational work.
 

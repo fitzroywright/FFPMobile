@@ -76,6 +76,12 @@ class KeystoreVault @Inject constructor(@ApplicationContext context: Context) {
 }
 
 class CredentialStore @Inject constructor(private val vault: KeystoreVault) {
-    fun saveAccessToken(token: String) = vault.write("api-access-token", token.toByteArray())
-    fun clear() = vault.remove("api-access-token")
+    fun saveAccessToken(endpoint: String, token: String) =
+        vault.write("warehouse-session", "$endpoint\n$token".toByteArray())
+
+    fun accessToken(): Pair<String, String>? = vault.read("warehouse-session")?.decodeToString()?.let {
+        it.substringBefore('\n') to it.substringAfter('\n')
+    }
+
+    fun clear() = vault.remove("warehouse-session")
 }

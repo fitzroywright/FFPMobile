@@ -14,8 +14,8 @@ val FieldProfile = MobileProfile(
     ),
     dashboard = "Purchase orders and payment requests",
     sections = listOf(
-        Section("My Purchase Orders", "Review purchase orders assigned to your account."),
-        Section("My Payment Requests", "Review payment requests assigned to your account."),
+        Section("My Purchase Orders", "Review purchase orders assigned to your account.", "purchase-orders"),
+        Section("My Payment Requests", "Review payment requests assigned to your account.", "payment-requests"),
         Section("Draft Documents", "Review documents before submission."),
         Section("Pending Approval", "Review documents awaiting approval."),
         Section("Recently Submitted", "Review recently submitted documents."),

@@ -17,18 +17,18 @@ public sealed class MobileApiException(string code, HttpStatusCode status) : Exc
     public bool EndsSession => (int)status is 401 or 403;
 }
 
-public sealed class WarehouseApiClient(HttpClient client, IInstallationKey key)
+public sealed class WarehouseApiClient(HttpClient client, IInstallationKey key, string application = Protocol.Application)
 {
     public Task<DeviceDetails> RegisterAsync(Uri origin, string name) =>
         SendAsync<DeviceDetails>(origin, HttpMethod.Post, "/api/devices/register",
-            body: new RegisterDevice(name, Protocol.Application, Convert.ToBase64String(key.PublicKey)));
+            body: new RegisterDevice(name, application, Convert.ToBase64String(key.PublicKey)));
 
     public Task<DeviceDetails> StatusAsync(Uri origin) =>
         SendAsync<DeviceDetails>(origin, HttpMethod.Get, "/api/devices/status");
 
     public Task<EmployeeSession> LoginAsync(Uri origin, string username, string password) =>
         SendAsync<EmployeeSession>(origin, HttpMethod.Post, "/api/auth/login",
-            body: new SessionLogin(username, password, Protocol.Application));
+            body: new SessionLogin(username, password, application));
 
     public Task<EmployeeSession> ValidateAsync(Uri origin, string token, bool refresh) =>
         SendAsync<EmployeeSession>(origin, refresh ? HttpMethod.Post : HttpMethod.Get,

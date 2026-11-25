@@ -15,6 +15,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    sourceSets.getByName("debug").assets.srcDir(layout.buildDirectory.dir("mock-tls-assets").get().asFile)
 }
 
 dependencies {

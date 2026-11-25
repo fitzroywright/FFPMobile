@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -49,13 +50,15 @@ import androidx.compose.ui.unit.dp
 internal fun FfpLoginScaffold(
     profile: MobileProfile,
     online: Boolean,
-    signInEnabled: Boolean,
     configured: Boolean,
     auth: LoginState,
     onSignIn: (String, String) -> Unit,
     openSettings: () -> Unit,
     openPreview: () -> Unit,
     onForgotPassword: () -> Unit,
+    modeToggle: (() -> Unit)?,
+    mock: Boolean,
+    enrollTablet: (() -> Unit)?,
 ) {
     val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     BoxWithConstraints(Modifier.fillMaxSize().background(FfpPale)) {
@@ -89,8 +92,8 @@ internal fun FfpLoginScaffold(
                         verticalArrangement = Arrangement.Center,
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        FfpLoginForm(profile, signInEnabled, configured, auth, onSignIn,
-                            openSettings, openPreview, onForgotPassword)
+                        FfpLoginForm(profile, configured, auth, onSignIn,
+                            openSettings, openPreview, onForgotPassword, modeToggle, mock, enrollTablet)
                     }
                 }
             }
@@ -100,8 +103,8 @@ internal fun FfpLoginScaffold(
                 verticalArrangement = Arrangement.spacedBy(FfpSpace.large),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                FfpLoginForm(profile, signInEnabled, configured, auth, onSignIn,
-                    openSettings, openPreview, onForgotPassword, compact = true)
+                FfpLoginForm(profile, configured, auth, onSignIn,
+                    openSettings, openPreview, onForgotPassword, modeToggle, mock, enrollTablet, compact = true)
                 FfpOfflineBanner(online)
                 FfpSyncStatus("Unavailable")
             }
@@ -149,13 +152,15 @@ internal fun FfpFeatureItem(feature: Section) {
 @Composable
 internal fun FfpLoginForm(
     profile: MobileProfile,
-    signInEnabled: Boolean,
     configured: Boolean,
     auth: LoginState,
     onSignIn: (String, String) -> Unit,
     openSettings: () -> Unit,
     openPreview: () -> Unit,
     onForgotPassword: () -> Unit,
+    modeToggle: (() -> Unit)?,
+    mock: Boolean,
+    enrollTablet: (() -> Unit)?,
     compact: Boolean = false,
 ) {
     var username by remember { mutableStateOf("") }
@@ -164,7 +169,7 @@ internal fun FfpLoginForm(
     var showServerError by remember { mutableStateOf(true) }
     val usernameError = if (attempted && username.isBlank()) "Enter your username." else null
     val passwordError = if (attempted && password.isBlank()) "Enter your password." else null
-    val enabled = signInEnabled && configured && !auth.loading
+    val enabled = configured && !auth.loading
     fun submit() {
         if (!enabled) return
         attempted = true
@@ -175,8 +180,8 @@ internal fun FfpLoginForm(
             attempted = false
         }
     }
-    LaunchedEffect(signInEnabled, configured) {
-        if (!signInEnabled || !configured) password = ""
+    LaunchedEffect(configured, mock) {
+        password = ""
     }
     Card(
         modifier = Modifier.widthIn(max = 520.dp).fillMaxWidth(),
@@ -193,6 +198,11 @@ internal fun FfpLoginForm(
             Text("Welcome", Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium)
             Box(Modifier.width(FfpSpace.action).height(3.dp).background(FfpGold))
             Text(profile.subtitle, style = MaterialTheme.typography.titleMedium, color = FfpMuted)
+            if (mock) Text("Mock sign-in · ${profile.application.demoLogin} / demo")
+            else Text("Active Directory · FFTPJ.LOCAL")
+            if (modeToggle != null) TextButton(modeToggle, enabled = !auth.loading) {
+                Text(if (mock) "Use Active Directory" else "Use Mock sign-in")
+            }
             FfpTextField(username, { username = it.take(256); showServerError = false }, "Username",
                 enabled = enabled, error = usernameError,
                 keyboard = KeyboardOptions(imeAction = ImeAction.Next))
@@ -204,9 +214,12 @@ internal fun FfpLoginForm(
             FfpPrimaryButton(if (auth.loading) "Signing in…" else "Sign In", ::submit, Modifier.fillMaxWidth(),
                 enabled = enabled, loading = auth.loading)
             when {
-                !signInEnabled -> FfpStatusIndicator("Sign-in is unavailable until the FFP Manager permission service is commissioned.")
                 !configured -> FfpStatusIndicator("Configure the private API in Device Settings.")
                 showServerError -> auth.error?.let { FfpErrorDisplay(it) }
+            }
+            if (enrollTablet != null) {
+                FfpSecondaryButton("Register or Check Tablet", enrollTablet, Modifier.fillMaxWidth(), enabled = enabled)
+                auth.deviceStatus?.let { status -> SelectionContainer { Text(status) } }
             }
             FfpSecondaryButton("Device Settings", openSettings, Modifier.fillMaxWidth(), enabled = !auth.loading)
             TextButton(openPreview, Modifier.align(Alignment.CenterHorizontally).heightIn(min = FfpSpace.touch),

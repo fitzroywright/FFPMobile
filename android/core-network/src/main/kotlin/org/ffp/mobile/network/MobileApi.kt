@@ -5,13 +5,19 @@ import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
+import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.POST
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLContext
+import javax.net.ssl.X509TrustManager
 import javax.inject.Inject
 import javax.inject.Singleton
 
-enum class MobileApplication(val apiId: String) {
-    FIELD("field-officers"), WAREHOUSE("warehouse-operations"), SECURITY("security-post"),
+enum class MobileApplication(val apiId: String, val demoLogin: String) {
+    FIELD("field-officers", "field-demo"),
+    WAREHOUSE("warehouse-operations", "warehouse-demo"),
+    SECURITY("security-post", "security-demo"),
 }
 
 class LoginRequest(val userName: String, val password: String, val application: String)
@@ -23,9 +29,24 @@ class LoginResponse(
     val authorizedModules: List<String>?,
 )
 
+class DeviceRegistration(val name: String, val application: String, val publicKey: String)
+class DeviceStatus(val id: String, val application: String, val status: Int)
+
 interface MobileApi {
+    @GET("api/devices/status")
+    suspend fun deviceStatus(): DeviceStatus
+
+    @POST("api/devices/register")
+    suspend fun register(@Body request: DeviceRegistration): DeviceStatus
+
     @POST("api/auth/login")
     suspend fun login(@Body request: LoginRequest): LoginResponse
+
+    @POST("api/auth/mock/login")
+    suspend fun mockLogin(@Body request: LoginRequest): LoginResponse
+
+    @POST("api/auth/logout")
+    suspend fun logout(@Header("Authorization") authorization: String)
 }
 
 fun privateEndpoint(input: String): String? {
@@ -46,10 +67,26 @@ class MobileApiFactory @Inject constructor() {
         .callTimeout(20, TimeUnit.SECONDS)
         .build()
 
-    fun create(endpoint: String): MobileApi = Retrofit.Builder()
-        .baseUrl(requireNotNull(privateEndpoint(endpoint)))
-        .client(client)
-        .addConverterFactory(GsonConverterFactory.create())
-        .build()
-        .create(MobileApi::class.java)
+    fun create(
+        endpoint: String,
+        trust: X509TrustManager? = null,
+        proof: ((String, String, String) -> Map<String, String>)? = null,
+    ): MobileApi {
+        val transport = client.newBuilder()
+        if (trust != null) {
+            val tls = SSLContext.getInstance("TLS").apply { init(null, arrayOf(trust), null) }
+            transport.sslSocketFactory(tls.socketFactory, trust)
+        }
+        if (proof != null) transport.addInterceptor { chain ->
+            val request = chain.request()
+            val token = request.header("Authorization").orEmpty().removePrefix("Bearer ")
+            val signed = request.newBuilder()
+            proof(request.method, request.url.encodedPath, token).forEach { (name, value) -> signed.header(name, value) }
+            chain.proceed(signed.build())
+        }
+        return Retrofit.Builder().baseUrl(requireNotNull(privateEndpoint(endpoint)))
+            .client(transport.build())
+            .addConverterFactory(GsonConverterFactory.create())
+            .build().create(MobileApi::class.java)
+    }
 }
