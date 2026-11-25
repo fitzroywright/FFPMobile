@@ -10,3 +10,5 @@
 *.apk
 *.aab
 local.settings.json
+/artifacts/
+/services/FFPMobile.Api/mobile-*.db*

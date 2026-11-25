@@ -1,5 +1,4 @@
 using FFPMobile.Shared.Profiles;
-using FFPMobile.Shared.Ui;
 
 namespace FFPMobile.App;
 
@@ -8,15 +7,18 @@ public sealed class App : Application
     protected override Window CreateWindow(IActivationState? activationState)
     {
         var profile = new AppProfile("FFP Mobile", "Warehouse & Operations",
-            "FFP Mobile Warehouse & Operations Android tablet application",
-            new ModuleDescriptor[]
+            "Food For The Poor Jamaica", new ModuleDescriptor[]
             {
-                new("Purchase Requisitions", "Create purchasing requests."),
-                new("Payment Requests", "Prepare payment requisitions."),
-                new("Delivery Orders", "Prepare stock deliveries."),
-                new("Returns to Stock", "Record returns linked to original issues."),
-                new("Count Sheets", "Capture physical inventory counts.")
+                new("Stock Counts", "Physical inventory counts."),
+                new("Inventory Reports", "Warehouse inventory reports."),
+                new("Delivery Orders", "Warehouse delivery orders."),
+                new("Return to Stock", "Stock returned from delivery orders."),
+                new("Goods Receival", "Warehouse goods receival notes.")
             });
-        return new Window(new NavigationPage(new LoginPage(profile, "warehouse-operations")));
+        var page = new WarehousePage(profile);
+        var window = new Window(new NavigationPage(page));
+        window.Stopped += (_, _) => page.Pause();
+        window.Resumed += async (_, _) => await page.ResumeAsync();
+        return window;
     }
 }

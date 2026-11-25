@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root=/opt/aegis-ffpmobile-services
+service=aegis-ffpmobile-services
+if [[ $# -ne 2 || ! $2 =~ ^[0-9a-f]{32}$ ]]; then
+    echo 'Usage: aegis-deploy-ffpmobile deploy|rollback <32-hex-release>' >&2
+    exit 2
+fi
+operation=$1
+release=$2
+target="$root/releases/$release"
+exec 9>"$root/.deploy.lock"
+flock -n 9
+
+switch_release() {
+    ln -sfnT "$1" "$root/.next"
+    mv -Tf "$root/.next" "$root/current"
+}
+check_health() {
+    local endpoint=$1
+    for attempt in {1..20}; do
+        if curl --noproxy '*' --fail --silent --max-time 5 --resolve mobile.ffpja.org:443:127.0.0.1             "https://mobile.ffpja.org/$endpoint" >/dev/null; then
+            return 0
+        fi
+        sleep 2
+    done
+    return 1
+}
+
+case "$operation" in
+    deploy)
+        test ! -e "$target"
+        install -d -m 0755 "$target"
+        # Read the upload through stdin and unpack with the unprivileged service account.
+        install -d -m 0700 -o "$service" -g "$service" "$target/app"
+        runuser -u "$service" -- tar -xzf - --no-same-owner --no-same-permissions -C "$target/app"
+        test -f "$target/app/FFPMobile.Api.dll"
+        chown -hR root:root "$target/app"
+        chmod 0755 "$target/app"
+        ;;
+    rollback)
+        test -f "$target/app/FFPMobile.Api.dll"
+        ;;
+    *) exit 2 ;;
+esac
+
+previous=$(readlink "$root/current" || true)
+switch_release "$target/app"
+if systemctl restart "$service" && check_health health && check_health health/ready; then
+    echo "Active FFPMobile release $release"
+    exit 0
+fi
+if [[ -n $previous ]]; then
+    switch_release "$previous"
+    systemctl restart "$service"
+else
+    systemctl stop "$service"
+    unlink "$root/current"
+fi
+echo "Health checks failed for release $release. Restored previous release when available." >&2
+exit 1

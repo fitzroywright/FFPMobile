@@ -1,0 +1,30 @@
+[Unit]
+Description=Aegis FFP Mobile Services
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aegis-ffpmobile-services
+Group=aegis-ffpmobile-services
+WorkingDirectory=/opt/aegis-ffpmobile-services/current
+ExecStart=/usr/bin/dotnet /opt/aegis-ffpmobile-services/current/FFPMobile.Api.dll
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=ASPNETCORE_URLS=http://127.0.0.1:5197
+Environment=FFPMOBILE_CONFIG_FILE=/etc/aegis/ffpmobile/appsettings.private.json
+Environment=Ingress__TrustLoopbackProxy=true
+Environment=Security__SqlitePath=/var/lib/aegis-ffpmobile-services/accounts.db
+Environment=Devices__SqlitePath=/var/lib/aegis-ffpmobile-services/devices.db
+Environment=TLS_REQCERT=demand
+StateDirectory=aegis-ffpmobile-services
+StateDirectoryMode=0750
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

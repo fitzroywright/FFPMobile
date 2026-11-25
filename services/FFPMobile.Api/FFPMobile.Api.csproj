@@ -3,9 +3,18 @@
     <TargetFramework>net11.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <CommonSecurityRoot Condition="'$(CommonSecurityRoot)' == ''">$(MSBuildThisFileDirectory)../../../Common.Security</CommonSecurityRoot>
+    <CommonRoot Condition="'$(CommonRoot)' == ''">$(MSBuildThisFileDirectory)../../../Common</CommonRoot>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Common.Security" Version="2.0.0" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="11.0.0" />
+    <ProjectReference Include="$(CommonSecurityRoot)/Common.Security.csproj" />
+    <ProjectReference Include="$(CommonRoot)/Common.Secrets/Common.Secrets.csproj" />
+    <ProjectReference Include="../FFPMobile.FfpManagerBridge/FFPMobile.FfpManagerBridge.csproj" />
+    <!-- Build the existing provider against the same Common.Security 2.0 assembly.
+         Its standalone project currently targets .NET 10 and references the .NET 11 core. -->
+    <PackageReference Include="System.DirectoryServices.Protocols" Version="11.0.0" />
+    <Compile Include="$(CommonSecurityRoot)/Common.Security.Plugin.ActiveDirectory/*.cs" Link="Common.Security.Plugin.ActiveDirectory/%(Filename)%(Extension)" />
+    <Compile Include="../../shared/WarehouseProtocol/*.cs" Link="WarehouseProtocol/%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>
