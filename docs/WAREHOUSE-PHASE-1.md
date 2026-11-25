@@ -1,8 +1,8 @@
 # Warehouse and Operations Phase 1
 
-The Android app remains a .NET MAUI tablet app. The working tree, tracked branches and existing Android build files contained no Kotlin or Gradle implementation. The Warehouse app uses the existing FFP colors, branding, centered login card and dashboard layout. It renders five server-defined capability IDs as tiles and includes a tile only when a current API response grants it. There are no transaction screens.
+The .NET API and its Warehouse enrollment endpoints are part of the current repository. The Android instructions and tablet behavior below describe the [previous .NET MAUI Warehouse client](https://github.com/fitzroywright/FFPMobile/tree/e6f3c358f8e051a799266b771ce22eeb8c8b253c). The current [Kotlin apps](ANDROID.md) offer UI previews. Warehouse sign-in and enrollment still need to be integrated into the Kotlin client.
 
-## Windows API and Android commands
+## Windows API and previous MAUI client commands
 
 Clone the approved Common.Security 2.0 and Common source revisions beside FFPMobile. The server uses the existing Common.Security core from the standalone checkout and compiles the standalone Active Directory plugin's original files against that core. The standalone plugin project currently targets .NET 10 while its core targets .NET 11. The nested Common copy of Common.Security lacks the approved-account and opaque-session APIs. Override `CommonSecurityRoot` and `CommonRoot` in MSBuild if the checkouts are elsewhere. Use an installed .NET 11 SDK, Android SDK Platform 37, build-tools 37.0.0 and JDK 21.
 
@@ -22,7 +22,7 @@ Pop-Location
 
 For organizational sign-in, set `$env:FFPMOBILE_CONFIG_FILE` to the absolute path of a protected, commissioned JSON configuration before starting the API. The file controls exact LDAPS hosts and search base, XAF bindings, and the approved secret provider. Release tablet builds use `https://mobile.ffpja.org/`. Debug builds allow an HTTPS origin under **Device Settings**. Local emulator testing requires a reachable hostname and a certificate whose SAN and trusted chain match that hostname. The Windows localhost developer certificate alone is insufficient for Android emulator connections.
 
-Build and launch only Warehouse from a separate Windows PowerShell window after starting an Android tablet emulator. If more than one device is online, replace `emulator-5554` with the intended serial shown by ADB.
+To build the previous MAUI client, use the linked repository snapshot. Build and launch Warehouse from a separate Windows PowerShell window after starting an Android tablet emulator. If more than one device is online, replace `emulator-5554` with the intended serial shown by ADB.
 
 ```powershell
 Set-Location D:\Projects\FFPMobile
@@ -89,7 +89,7 @@ FFPMobile denies access when this evaluator, its bindings or its required decisi
 | `services/FFPMobile.Api/{Program,Authentication,DeviceStore,WarehouseEndpoints}.cs`, API project and appsettings | LDAPS, account binding and session management, request proof, approval inventory, auditing and health |
 | `services/FFPMobile.FfpManagerBridge/` | Stable Warehouse capabilities, verified XAF identity bindings and HTTPS evaluator client |
 | `shared/WarehouseProtocol/` | Device and authentication contracts, signed HTTPS client and offline interfaces |
-| `apps/FFPMobile.WarehouseOperations/` | Tablet sign-in, authorized dashboard, secure session storage, Android manifest and Keystore |
+| [Previous MAUI Warehouse client](https://github.com/fitzroywright/FFPMobile/tree/e6f3c358f8e051a799266b771ce22eeb8c8b253c/apps/FFPMobile.WarehouseOperations) | Tablet sign-in, authorized dashboard, secure session storage, Android manifest and Keystore |
 | `tests/FFPMobile.Api.Tests/` | API, client and bridge automation with test-only directory and evaluator substitutes |
 | `deploy/kratos/`, `scripts/Deploy-FFPMobile-Kratos.ps1` | Private ingress, systemd, OpenBao, release installation and rollback |
 | `.gitignore`, `.gitattributes`, `docs/` | Local artifact exclusions, Linux deployment file line endings and commissioning instructions |

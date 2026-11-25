@@ -12,3 +12,8 @@
 local.settings.json
 /artifacts/
 /services/FFPMobile.Api/mobile-*.db*
+
+.gradle/
+**/build/
+android/local.properties
+android/.kotlin/

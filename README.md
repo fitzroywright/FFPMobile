@@ -1,24 +1,13 @@
 # FFP Mobile
 
-Three independently deployable Android tablet applications, built with .NET MAUI:
+Three native Android tablet apps share a Kotlin and Jetpack Compose foundation. Each installs separately and opens to a branded sign-in screen and an isolated UI preview.
 
-- **FFP Mobile Field Officers** — field-work application.
-- **FFP Mobile Warehouse & Operations** — purchase requisitions, payment requests, delivery orders, returns to stock, and inventory count sheets.
-- **FFP Mobile Security Post** — gate and dispatch verification.
+| App | Android package |
+| --- | --- |
+| Field Officers | `org.ffp.mobile.fieldofficers` |
+| Warehouse & Operations | `org.ffp.mobile.warehouse` |
+| Security Post | `org.ffp.mobile.security` |
 
-The applications share UI foundations and security/sync contracts, but each has its own Android application ID and release lifecycle.
+Open `android/` in Android Studio. See the [Android development guide](docs/ANDROID.md) for setup, APKs, the emulator and device settings.
 
-## Status
-
-Initial scaffold only. This repository does **not** yet provide a working ERP bridge, FFP Manager authentication, encrypted local persistence, or production offline synchronization. Authentication screens are **non-functional** until the secure identity integration is implemented; demonstration content must not be presented as live data.
-
-## Security and integration rules
-
-- FFP Manager effective XAF permissions are authoritative; never invent standalone mobile roles.
-- No direct SQL Server connection from tablets.
-- Mobile clients use a dedicated internal FFP Integration Services API (not Request Portal's internet-origin bridge).
-- ERP-specific code remains inside replaceable FFP Manager / Business Central adapters.
-- Transaction creation must eventually operate offline; server-side permission checks and posting only after synchronization.
-- Never retain plain-text passwords or privileged API secrets on a tablet.
-
-See `docs/ARCHITECTURE.md` and `docs/IMPLEMENTATION.md`.
+The .NET API under `services/FFPMobile.Api` contains the Warehouse authentication and tablet enrollment endpoints. The Kotlin apps currently offer UI previews. Live sign-in, enrollment and transaction synchronization still need to be integrated into the Kotlin apps. See the [architecture](docs/ARCHITECTURE.md) and [release gates](docs/IMPLEMENTATION.md).

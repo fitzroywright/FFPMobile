@@ -1,18 +1,11 @@
 # Implementation backlog and release gates
 
-## What exists
+The current Android deliverables are the login and settings interfaces, isolated preview dashboards and module navigation, plus the private API client and warehouse offline infrastructure.
 
-Android MAUI app entrypoints, a shared preview login layout, three distinct module dashboards, unique Android package IDs, and baseline architecture documentation.
+## Before deployment
 
-## Required before deployment
-
-1. Verify build with installed .NET 11 Android + MAUI workloads on supported Windows/macOS agent. No build has been executed by this scaffold author.
-2. Integrate actual approved FFP Manager authentication, without retaining passwords. Replace preview-only login.
-3. Add server-resolved effective XAF security permissions and signed bounded offline authorization.
-4. Add encrypted SQLite storage, persistent outbox and conflict-resolution sync protocols.
-5. Implement fully working role-gated module screens, validation, attachments and barcode capture.
-6. Build private FFP Integration Services with isolated gateway and ERP adapters, separate from Request Portal.
-7. Test device enrollment/revocation, power loss, reconnect, retry/idempotency, authorization changes, inventory conflicts.
-8. Conduct UAT, accessibility and tablet layout verification; sign binaries and configure device management.
-
-**Do not publish prototype preview builds as production apps.**
+1. Commission the approved Common.Security provider and the effective FFP Manager XAF permission adapter. Integrate the Kotlin client with the Warehouse API for tablet enrollment, signed requests, session lifecycle and logout before enabling credential entry.
+2. Define the server contract for app-, account- and device-bound offline permissions. Provision the verification key and trusted time, define refresh and revocation, and enforce capabilities per action.
+3. Specify warehouse payloads, the idempotency and status API, retryable failure mapping, conflict resolution and audit rules. Wire the live session provider and transport. Verify duplicate submission, reconnect, power loss, revocation and conflict handling against a staging server.
+4. Agree field workflows, attachments and assigned-work rules. Design Security Post checkpoints and online authorization for physical release with operations staff.
+5. Finish audited production screens, signed releases, device management and UAT, including authorization changes and tablet accessibility.
